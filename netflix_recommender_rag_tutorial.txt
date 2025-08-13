@@ -1,0 +1,480 @@
+How to Build a Netflix Recommender RAG for TV Shows and Movies with Pinecone
+==========================================================================
+
+## Table of Contents
+1. Introduction
+2. Prerequisites
+3. Project Overview
+4. Environment Setup
+5. TMDB API Integration
+6. Pinecone Vector Database Setup
+7. OpenAI for AI-Powered Explanations
+8. FastAPI Backend Implementation
+9. Building the RAG (Retrieval-Augmented Generation) Logic
+10. Testing and Debugging
+11. Deployment
+12. Troubleshooting and Tips
+13. Further Improvements
+
+---
+
+# 1. Introduction
+
+This tutorial will guide you step-by-step through building a Netflix-style recommender system for TV shows and movies using Retrieval-Augmented Generation (RAG) techniques. We'll leverage Pinecone for vector search, TMDB for content data, and OpenAI for AI-powered explanations. The backend will be built with FastAPI, and the system will be compatible with Python 3.11.
+
+By the end of this tutorial, you'll have a fully functional REST API that can recommend Netflix content, explain recommendations using AI, and be ready for production deployment.
+
+# 2. Prerequisites
+
+- Basic knowledge of Python (3.11+ recommended)
+- Familiarity with REST APIs
+- Some experience with virtual environments and pip
+- Accounts and API keys for:
+  - [TMDB (The Movie Database)](https://www.themoviedb.org/documentation/api)
+  - [Pinecone](https://www.pinecone.io/)
+  - [OpenAI](https://platform.openai.com/)
+
+# 3. Project Overview
+
+We will build a system with the following components:
+- **TMDB API**: Source of Netflix TV shows and movies metadata
+- **Pinecone**: Vector database for semantic search and similarity matching
+- **OpenAI**: For generating natural language explanations and summaries
+- **FastAPI**: REST API backend
+- **RAG Logic**: Combines retrieval (vector search) and generation (AI explanations)
+
+The workflow:
+1. User submits a query (e.g., "I love action movies with car chases")
+2. The system retrieves relevant Netflix content from Pinecone using semantic search
+3. For each recommendation, the system generates an AI-powered explanation
+4. The API returns a list of recommendations with explanations
+
+---
+
+# 4. Environment Setup
+
+## 4.1. Install Python 3.11
+
+Make sure you have Python 3.11 installed. You can check your version with:
+
+    python --version
+
+If you need to install Python 3.11:
+- **macOS**: Use [Homebrew](https://brew.sh/):
+    brew install python@3.11
+- **Windows**: Download from [python.org](https://www.python.org/downloads/release/python-3110/)
+- **Linux**: Use your package manager, e.g.:
+    sudo apt-get install python3.11 python3.11-venv
+
+## 4.2. Clone the Project Repository
+
+If you haven't already, clone the project:
+
+    git clone <your-repo-url>
+    cd Media\ Recommender
+
+## 4.3. Create and Activate a Virtual Environment
+
+It's best practice to use a virtual environment to manage dependencies:
+
+    python3.11 -m venv venv
+    # On macOS/Linux:
+    source venv/bin/activate
+    # On Windows:
+    venv\Scripts\activate
+
+## 4.4. Install Dependencies
+
+Install all required Python packages:
+
+    pip install --upgrade pip
+    pip install -r requirements.txt
+
+If you encounter errors, make sure you are using Python 3.11 and your virtual environment is activated.
+
+## 4.5. Set Up Environment Variables
+
+The project uses a `.env` file to store API keys and configuration. If you don't have a `.env` file:
+
+1. Copy the example file:
+
+       cp .env.example .env
+
+2. Open `.env` in a text editor and fill in your API keys:
+
+    - `TMDB_API_KEY` (from TMDB)
+    - `PINECONE_API_KEY` and `PINECONE_ENVIRONMENT` (from Pinecone dashboard)
+    - `OPENAI_API_KEY` (from OpenAI platform)
+
+Example `.env` snippet:
+
+    TMDB_API_KEY=your_tmdb_key_here
+    PINECONE_API_KEY=your_pinecone_key_here
+    PINECONE_ENVIRONMENT=us-west1-gcp
+    OPENAI_API_KEY=your_openai_key_here
+
+**Never share your .env file or commit it to version control!**
+
+## 4.6. Run the Setup Script (Optional)
+
+You can run the provided setup script to check your environment and dependencies:
+
+    python setup.py
+
+This script will:
+- Check your Python version
+- Ensure all dependencies are installed
+- Verify your `.env` file and API keys
+
+---
+
+# 5. TMDB API Integration
+
+## 5.1. What is TMDB?
+
+[TMDB (The Movie Database)](https://www.themoviedb.org/) is a popular, community-driven database for movies and TV shows. It provides a free API for accessing metadata, images, and streaming provider information—including Netflix availability.
+
+## 5.2. Register for a TMDB API Key
+
+1. Go to [TMDB API registration](https://www.themoviedb.org/settings/api)
+2. Sign up for a free account (if you don’t have one)
+3. Fill out the API request form and agree to the terms
+4. Once approved, you’ll find your API key in your TMDB account settings
+
+**Keep your API key private!**
+
+## 5.3. Add Your TMDB API Key to the Project
+
+1. Open your `.env` file
+2. Set the value for `TMDB_API_KEY`:
+
+       TMDB_API_KEY=your_tmdb_api_key_here
+
+## 5.4. How the Project Uses TMDB
+
+The project uses TMDB to:
+- Fetch lists of Netflix-licensed movies and TV shows
+- Retrieve metadata (title, overview, genres, images, etc.)
+- Filter by genre and streaming provider
+
+## 5.5. Understanding `tmdb_client.py`
+
+The `tmdb_client.py` file contains all logic for interacting with the TMDB API. Key functions include:
+
+- `get_netflix_movies(page=1)`: Fetches a page of Netflix movies
+- `get_netflix_tv_shows(page=1)`: Fetches a page of Netflix TV shows
+- `get_movie_details(movie_id)`: Retrieves detailed info for a specific movie
+- `get_tv_details(tv_id)`: Retrieves detailed info for a specific TV show
+- `get_genres()`: Returns a mapping of genre names to TMDB genre IDs
+
+These functions handle API requests, pagination, and error handling. They are used by the backend to populate the vector store and serve recommendations.
+
+## 5.6. Testing Your TMDB Integration
+
+You can test your TMDB connection by running a simple script or using the `/genres` or `/populate` endpoints in your API. If you see valid movie/TV data, your TMDB integration is working!
+
+---
+
+# 6. Pinecone Vector Database Setup
+
+## 6.1. What is Pinecone?
+
+[Pinecone](https://www.pinecone.io/) is a fully managed vector database service. It allows you to store, index, and search high-dimensional vectors efficiently—perfect for semantic search and recommendation systems.
+
+## 6.2. Sign Up and Get Your Pinecone API Key
+
+1. Go to [Pinecone.io](https://www.pinecone.io/)
+2. Sign up for a free account
+3. In the Pinecone dashboard, create a new project
+4. Copy your API key and environment (e.g., `us-west1-gcp`)
+
+## 6.3. Add Pinecone Credentials to Your .env File
+
+Open your `.env` file and set:
+
+    PINECONE_API_KEY=your_pinecone_api_key_here
+    PINECONE_ENVIRONMENT=your_pinecone_environment_here
+
+## 6.4. Create a Pinecone Index
+
+You can create an index via the Pinecone dashboard or programmatically. For this project, use the dashboard:
+
+1. Go to the "Indexes" tab
+2. Click "Create Index"
+3. Name your index (e.g., `netflix-recommender`)
+4. Set the dimension (e.g., 1024 for multilingual-e5-large embeddings)
+5. Choose metric: `cosine`
+6. Click "Create"
+
+Record your index name and update your `.env` or `config.py` if needed.
+
+## 6.5. How the Project Uses Pinecone
+
+Pinecone stores vector embeddings of Netflix movies and TV shows. When a user submits a query, the system:
+- Converts the query into an embedding
+- Searches Pinecone for similar content vectors
+- Retrieves the most relevant items for recommendations
+
+## 6.6. Understanding `vector_store.py`
+
+The `vector_store.py` file manages all interactions with Pinecone. Key functions include:
+- `upsert_items(items)`: Adds or updates vectors in the index
+- `search_similar(query, genre_filter, top_k)`: Finds the most similar items to a query
+- `generate_embedding(text)`: Converts text to a vector using the selected embedding model
+- `generate_explanation(movie, query)`: Uses OpenAI or Gemini to generate a natural language explanation for a recommendation
+- Handles Pinecone initialization, error handling, and fallback logic
+
+## 6.7. Testing Your Pinecone Integration
+
+You can test Pinecone by running the `/populate` endpoint (to upsert data) and `/recommendations` (to search). You can also use `test_pinecone.py` for direct testing.
+
+If you see errors about index not found, dimension mismatch, or authentication, double-check your Pinecone dashboard and `.env` settings.
+
+---
+
+# 7. OpenAI for AI-Powered Explanations
+
+## 7.1. What is OpenAI?
+
+[OpenAI](https://platform.openai.com/) provides advanced AI models for natural language processing, including GPT-3.5, GPT-4, and embedding models. In this project, OpenAI is used to generate human-like explanations for each recommendation and to create vector embeddings for semantic search.
+
+## 7.2. Get Your OpenAI API Key
+
+1. Go to [OpenAI Platform](https://platform.openai.com/signup)
+2. Sign up for an account (or log in)
+3. Navigate to the API Keys section in your account dashboard
+4. Click "Create new secret key" and copy the key
+
+**Keep your API key private!**
+
+## 7.3. Add Your OpenAI API Key to the Project
+
+Open your `.env` file and set:
+
+    OPENAI_API_KEY=your_openai_api_key_here
+
+## 7.4. How the Project Uses OpenAI
+
+- **Embeddings**: Converts user queries and content into high-dimensional vectors for semantic search (using models like `text-embedding-ada-002` or `text-embedding-3-small`)
+- **Explanations**: Generates natural language explanations for why a user might like a recommended movie or show (using models like `gpt-3.5-turbo` or `gpt-4`)
+
+## 7.5. Understanding `ai_service.py`
+
+The `ai_service.py` file manages all interactions with OpenAI. Key functions include:
+- `get_embedding(text, model)`: Gets a vector embedding for a given text
+- `generate_explanation(movie, query, model)`: Uses a chat model to generate a personalized explanation for a recommendation
+- Handles API errors, rate limits, and model selection
+
+## 7.6. Rate Limits and Best Practices
+
+- **OpenAI API has rate limits** (requests per minute, tokens per minute). If you hit a rate limit, you may see errors or delays.
+- Use the smallest model that meets your needs to reduce cost and increase speed (e.g., `gpt-3.5-turbo` for explanations, `text-embedding-3-small` for embeddings)
+- Cache embeddings and explanations where possible to avoid redundant API calls
+- Monitor your usage in the OpenAI dashboard
+
+## 7.7. Testing Your OpenAI Integration
+
+You can test OpenAI integration by running the `/recommendations` endpoint and checking for AI-generated explanations in the response. If you see errors about authentication or rate limits, double-check your API key and usage.
+
+---
+
+# 8. FastAPI Backend Implementation
+
+## 8.1. What is FastAPI?
+
+[FastAPI](https://fastapi.tiangolo.com/) is a modern, high-performance web framework for building APIs with Python. It is known for its speed, automatic OpenAPI documentation, and easy integration with Pydantic models for data validation.
+
+## 8.2. Why Use FastAPI?
+- **Automatic docs**: Interactive Swagger UI and ReDoc out of the box
+- **Type safety**: Uses Python type hints and Pydantic for validation
+- **Async support**: Handles async endpoints for high performance
+- **Easy testing**: Simple to test endpoints with HTTP clients
+
+## 8.3. Project Structure Overview
+
+- `main.py`: FastAPI app entry point, defines all API routes
+- `models.py`: Pydantic models for requests and responses
+- `recommendation_service.py`: Core business logic for recommendations
+- `vector_store.py`, `ai_service.py`, `tmdb_client.py`: Integrations with Pinecone, OpenAI, and TMDB
+- `config.py`: Configuration and environment variable management
+
+## 8.4. Key API Endpoints
+
+- `POST /populate`: Populate the Pinecone vector store with Netflix content from TMDB
+- `POST /recommendations`: Get personalized recommendations based on user input and genre
+- `GET /genres`: List available genres
+- `GET /stats`: Show stats about the vector store and embeddings
+- `DELETE /clear-index`: Remove all data from Pinecone index
+- `GET /`: Health check endpoint
+
+## 8.5. How the API Works
+
+1. **Populate**: `/populate` fetches Netflix content from TMDB and stores vector embeddings in Pinecone
+2. **Recommend**: `/recommendations` takes user input, finds similar content in Pinecone, and generates AI explanations with OpenAI
+3. **Other endpoints**: Provide metadata, health checks, and management tools
+
+## 8.6. Running the FastAPI Server
+
+From your project directory, activate your virtual environment and run:
+
+    python run.py
+
+Or, directly with Uvicorn:
+
+    uvicorn main:app --reload
+
+The server will start on `http://localhost:8000` by default.
+
+## 8.7. Using Swagger UI
+
+FastAPI automatically generates interactive API docs at:
+- [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
+- [http://localhost:8000/redoc](http://localhost:8000/redoc) (ReDoc)
+
+You can test all endpoints, view request/response models, and try out the API directly from your browser.
+
+## 8.8. Testing Endpoints
+
+- Use Swagger UI or tools like [Postman](https://www.postman.com/) or [httpie](https://httpie.io/)
+- Example: To get recommendations, send a POST request to `/recommendations` with a JSON body like:
+
+      {
+        "user_input": "I love sci-fi with mind-bending plots",
+        "genre": "Science Fiction",
+        "limit": 3
+      }
+
+- Check the response for a list of recommendations and AI-generated explanations
+
+---
+
+# 9. Building the RAG (Retrieval-Augmented Generation) Logic
+
+## 9.1. What is RAG?
+
+RAG stands for Retrieval-Augmented Generation. It is a technique that combines information retrieval (finding relevant documents or data) with natural language generation (creating human-like responses or explanations). In this project, RAG is used to:
+- Retrieve the most relevant Netflix movies/TV shows for a user's query (retrieval)
+- Generate a personalized explanation for each recommendation (generation)
+
+## 9.2. RAG Flow in This Project
+
+1. **User submits a query** (e.g., "I love thrillers with plot twists") via the `/recommendations` endpoint
+2. **Query processing**: The query is enhanced and analyzed for intent (see `smart_query_processor.py`)
+3. **Embedding generation**: The query is converted into a vector embedding using OpenAI (see `ai_service.py`)
+4. **Vector search**: The embedding is used to search Pinecone for similar content vectors (see `vector_store.py`)
+5. **Recommendation selection**: The top results are filtered and selected as recommendations
+6. **AI explanation generation**: For each recommendation, OpenAI generates a natural language explanation (see `ai_service.py` and `vector_store.py`)
+7. **Response assembly**: The API returns a list of recommendations, each with metadata and an AI-generated explanation
+
+## 9.3. Key Files and Functions
+
+- `main.py`: Orchestrates the RAG flow in the `/recommendations` endpoint
+- `recommendation_service.py`: Implements the main RAG logic, including query processing, retrieval, and generation
+- `vector_store.py`: Handles vector search and explanation generation
+- `ai_service.py`: Manages embedding and explanation calls to OpenAI
+- `smart_query_processor.py`: Enhances and interprets user queries
+
+## 9.4. Customizing the RAG Logic
+
+- **Change embedding or chat models**: Update the model names in your `.env` or `config.py` (e.g., use `gpt-4` for higher quality explanations)
+- **Add new retrieval filters**: Modify `vector_store.py` to filter by additional metadata (e.g., release year, rating)
+- **Improve query processing**: Enhance `smart_query_processor.py` to better understand user intent
+- **Cache explanations**: Store generated explanations to reduce API calls and cost
+
+## 9.5. Example: End-to-End RAG Flow
+
+1. User POSTs to `/recommendations`:
+
+       {
+         "user_input": "I want a feel-good comedy with a strong female lead",
+         "genre": "Comedy",
+         "limit": 3
+       }
+
+2. The backend processes the query, generates an embedding, and searches Pinecone
+3. Top 3 comedy movies/shows are selected
+4. For each, OpenAI generates a custom explanation (e.g., "You'll love this movie for its witty humor and empowering protagonist...")
+5. The API returns:
+
+       {
+         "recommendations": [
+           {
+             "movie": { ... },
+             "why_you_would_like_it": "...",
+             "memorable_quotes": [ ... ],
+             "memorable_moments": [ ... ]
+           },
+           ...
+         ],
+         "total_found": 3
+       }
+
+## 9.6. Tips for Extending RAG
+
+- Integrate additional data sources (e.g., IMDB, Rotten Tomatoes)
+- Add user profiles or feedback for personalized recommendations
+- Experiment with different embedding or generation models
+- Add support for multi-turn conversations or chatbots
+
+---
+
+# 10. Testing and Debugging
+
+## 10.1. Testing the API Endpoints
+
+- Use Swagger UI at [http://localhost:8000/docs](http://localhost:8000/docs) to interactively test all endpoints.
+- Try the `/populate` endpoint to load Netflix content into Pinecone.
+- Use the `/recommendations` endpoint to get recommendations and check for AI-generated explanations.
+- Test `/genres`, `/stats`, and `/clear-index` for additional functionality.
+
+## 10.2. Using Test Scripts
+
+- `test_pinecone.py`: Directly tests Pinecone integration, upserts, and queries. Run it with:
+
+      python test_pinecone.py
+
+- `check_syntax.py`: Checks for syntax errors in your codebase. Run it with:
+
+      python check_syntax.py
+
+## 10.3. Writing Your Own Tests
+
+- You can write additional test scripts using Python's `requests` library or tools like [pytest](https://docs.pytest.org/).
+- Example: Test the `/recommendations` endpoint with different genres and user inputs.
+
+## 10.4. Debugging Common Issues
+
+### Pinecone Issues
+- **Index not found**: Check your Pinecone dashboard and `.env` settings.
+- **Dimension mismatch**: Ensure your index dimension matches your embedding model (e.g., 1024 for multilingual-e5-large).
+- **Authentication errors**: Double-check your API key and environment.
+
+### OpenAI Issues
+- **Rate limit errors**: Slow down requests, use smaller models, or upgrade your OpenAI plan.
+- **Authentication errors**: Verify your API key in `.env`.
+- **Quota exceeded**: Monitor usage in the OpenAI dashboard.
+
+### TMDB Issues
+- **Invalid API key**: Make sure your TMDB API key is correct and active.
+- **No results**: Check your query, genre, and TMDB API status.
+
+### FastAPI Issues
+- **Validation errors**: Ensure your request/response models match the API spec.
+- **Server not starting**: Check for syntax errors or missing dependencies.
+
+## 10.5. Interpreting Logs
+
+- The backend logs important events, errors, and warnings to the console.
+- Look for log messages when debugging issues with recommendations, population, or API calls.
+- Increase log verbosity in `main.py` or `config.py` if needed.
+
+## 10.6. Tips for Effective Debugging
+
+- Test each integration (TMDB, Pinecone, OpenAI) separately before combining them.
+- Use print statements or logging to trace data flow.
+- Check API responses for detailed error messages.
+- Keep your dependencies up to date.
+
+---
+
+(Next section: Deployment) 

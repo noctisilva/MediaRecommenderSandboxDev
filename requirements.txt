@@ -1,0 +1,39 @@
+# Netflix Media Recommender API - Pinecone Edition
+# Core dependencies for Pinecone embeddings + Netflix recommendations
+
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Pinecone (vector database + embeddings) - NEW package name!
+pinecone>=4.0.0
+
+# TMDB API (Netflix content discovery)
+requests==2.31.0
+
+# Configuration and models
+python-dotenv==1.0.0
+pydantic==2.5.0
+
+# Gemini AI (for explanations only)
+google-generativeai==0.3.2
+
+# Utilities
+numpy==1.24.3
+python-multipart==0.0.6
+typing-extensions==4.8.0
+httpx==0.25.2 content discovery)
+requests==2.31.0
+
+# Configuration and models
+python-dotenv==1.0.0
+pydantic==2.5.0
+
+# Gemini AI (for explanations only)
+google-generativeai==0.3.2
+
+# Utilities
+numpy==1.24.3
+python-multipart==0.0.6
+typing-extensions==4.8.0
+httpx==0.25.2
